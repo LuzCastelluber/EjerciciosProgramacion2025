@@ -1,116 +1,62 @@
-// --------------------------------------------------------------------------------------
-// Archivo: EjerciciosprogramaciCharacter.h
-// Objetivo: Personaje con cámara básica y 3 acciones mapeadas desde C++.
-// Cada línea está comentada justo arriba (Parte A del TP).
-// --------------------------------------------------------------------------------------
-
+// Evita inclusiones múltiples del header
 #pragma once
-// Evita múltiples inclusiones del header durante la compilación.
 
+// Incluye el núcleo de UE: tipos básicos, macros, etc.
 #include "CoreMinimal.h"
-// Tipos/utilidades base de Unreal (FString, FVector, logs, etc.).
-
+// Incluye la clase base ACharacter, que ya trae movimiento, salto, etc.
 #include "GameFramework/Character.h"
-// Clase base de personaje con movimiento, cápsula, etc.
-
-#include "Camera/CameraComponent.h"
-// Permite declarar y usar la cámara del jugador.
-
-#include "GameFramework/SpringArmComponent.h"
-// Permite usar el brazo de cámara (boom) con colisión y distancia.
-
-#include "TimerManager.h"
-// Permite usar timers (lo necesitamos para restaurar el FOV en AccionEspecial).
-
+// Genera el código de reflexión necesario para UCLASS/UPROPERTY/GENERATED_BODY
 #include "EjerciciosprogramaciCharacter.generated.h"
-// Macro obligatoria para generar el código de reflexión de Unreal.
 
-// Declaro una categoría de logs propia para este Character.
-DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
-
-// UCLASS marca esta clase para el sistema de reflexión.
+// Declara una clase de Character para nuestro juego
 UCLASS()
 class AEjerciciosprogramaciCharacter : public ACharacter
-	// Heredamos de ACharacter para tener movimiento estándar.
 {
+	// Inserta código que UE usa para construcción/reflexión de la clase
 	GENERATED_BODY()
-	// Inserta boilerplate requerido por Unreal.
 
 public:
-	// Constructor: creo componentes y valores por defecto.
+	// Constructor: se usa para fijar valores por defecto de propiedades/componentes
 	AEjerciciosprogramaciCharacter();
 
 protected:
-	// BeginPlay: se ejecuta al empezar el juego o al spawnear.
+	// BeginPlay se ejecuta cuando el juego inicia o el actor aparece en el mundo
 	virtual void BeginPlay() override;
 
-	// Enlaces de entradas: donde bindeamos teclas/acciones a funciones C++.
+	// SetupPlayerInputComponent es donde hacemos el "binding" de Inputs a funciones
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
-private:
-	// ---- Componentes de cámara ----
-	UPROPERTY(VisibleAnywhere, Category = "Cámara")
-	USpringArmComponent* SpringArm;
-	// Brazo que mantiene la cámara a una distancia con suavizado/colisión.
+	// Landed se llama cuando el personaje aterriza; útil si luego quisieras lógica al tocar el piso
+	virtual void Landed(const FHitResult& Hit) override;
 
-	UPROPERTY(VisibleAnywhere, Category = "Cámara")
-	UCameraComponent* FollowCamera;
-	// Cámara que sigue al personaje al final del SpringArm.
+	// ----- Parámetros editables desde el editor -----
 
-	// ---- Parámetros de movimiento ----
+	// Velocidad normal de caminata (se puede ajustar en el editor sin recompilar)
 	UPROPERTY(EditAnywhere, Category = "Movimiento")
-	float WalkSpeed = 300.f;
-	// Velocidad de caminar (editable desde el editor).
+	float WalkSpeed = 500.f;
 
+	// Velocidad al correr/sprint (también editable)
 	UPROPERTY(EditAnywhere, Category = "Movimiento")
-	float RunSpeed = 650.f;
-	// Velocidad de correr (editable desde el editor).
+	float SprintSpeed = 900.f;
 
-	// ---- Estado ----
-	bool bIsRunning = false;
-	// Flag para saber si estamos corriendo.
+	// Cantidad de saltos EXTRA (además del salto base). 1 = doble salto
+	UPROPERTY(EditAnywhere, Category = "Salto")
+	int32 MaxExtraJumps = 1;
 
-	// ---- Acciones (métodos) ----
-	UFUNCTION()
-	void AccionMostrarMensaje();
-	// Muestra un mensaje en pantalla (Parte B: acción 1).
+	// ----- Funciones que se bindean a las acciones -----
 
-	UFUNCTION()
-	void AccionAlternarCorrer();
-	// Alterna entre caminar y correr (Parte B: acción 2).
+	// Muestra un mensaje en pantalla al presionar la tecla configurada
+	void OnMostrarMensaje();
 
-	UFUNCTION()
-	void AccionEspecial();
-	// Cambia FOV temporalmente (Parte B: acción 3).
+	// Inicia el sprint (sube la MaxWalkSpeed mientras está presionado)
+	void StartSprinting();
 
-	// ---- Soporte de AccionEspecial ----
-	float FOVOriginal = 90.f;
-	// Guardamos FOV original para restaurarlo.
+	// Detiene el sprint (restaura la velocidad normal)
+	void StopSprinting();
 
-	UPROPERTY(EditAnywhere, Category = "Cámara")
-	float FOVEspecial = 70.f;
-	// FOV temporal cuando disparamos la acción especial.
+	// Se llama al presionar el input de salto; usa el sistema de Jump del Character
+	void OnSaltoExtraPressed();
 
-	UPROPERTY(EditAnywhere, Category = "Cámara")
-	float DuracionFOV = 0.75f;
-	// Cuánto dura el FOV especial antes de restaurar.
-
-	FTimerHandle TimerHandle_RestoreFOV;
-	// Timer para volver al FOV original.
-
-	// Función privada para restaurar el FOV tras el timer.
-	void RestaurarFOV();
-
-	// ---- Movimiento analógico (opcional útil) ----
-	void MoveForward(float Value);
-	// Avanza/retrocede con W/S o stick.
-
-	void MoveRight(float Value);
-	// Se mueve lateralmente con A/D o stick.
-
-	void Turn(float Value);
-	// Yaw con mouse/stick horizontal.
-
-	void LookUp(float Value);
-	// Pitch con mouse/stick vertical.
+	// Al soltar Space, detiene la acumulación del salto (mantiene comportamiento esperado)
+	void OnSaltoExtraReleased();
 };
