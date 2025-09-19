@@ -1,235 +1,337 @@
-﻿// Copyright Epic Games, Inc.
+﻿// --------------------------------------------------------------------------------------
+// Archivo: EjerciciosprogramaciCharacter.h
+// Objetivo: Personaje con cámara básica y 3 acciones mapeadas desde C++.
+// Cada línea está comentada justo arriba (Parte A del TP).
+// --------------------------------------------------------------------------------------
+
+#pragma once
+// Evita múltiples inclusiones del header durante la compilación.
+
+#include "CoreMinimal.h"
+// Tipos/utilidades base de Unreal (FString, FVector, logs, etc.).
+
+#include "GameFramework/Character.h"
+// Clase base de personaje con movimiento, cápsula, etc.
+
+#include "Camera/CameraComponent.h"
+// Permite declarar y usar la cámara del jugador.
+
+#include "GameFramework/SpringArmComponent.h"
+// Permite usar el brazo de cámara (boom) con colisión y distancia.
+
+#include "TimerManager.h"
+// Permite usar timers (lo necesitamos para restaurar el FOV en AccionEspecial).
+
+#include "EjerciciosprogramaciCharacter.generated.h"
+// Macro obligatoria para generar el código de reflexión de Unreal.
+
+// Declaro una categoría de logs propia para este Character.
+DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
+
+// UCLASS marca esta clase para el sistema de reflexión.
+UCLASS()
+class AEjerciciosprogramaciCharacter : public ACharacter
+	// Heredamos de ACharacter para tener movimiento estándar.
+{
+	GENERATED_BODY()
+	// Inserta boilerplate requerido por Unreal.
+
+public:
+	// Constructor: creo componentes y valores por defecto.
+	AEjerciciosprogramaciCharacter();
+
+protected:
+	// BeginPlay: se ejecuta al empezar el juego o al spawnear.
+	virtual void BeginPlay() override;
+
+	// Enlaces de entradas: donde bindeamos teclas/acciones a funciones C++.
+	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+
+private:
+	// ---- Componentes de cámara ----
+	UPROPERTY(VisibleAnywhere, Category = "Cámara")
+	USpringArmComponent* SpringArm;
+	// Brazo que mantiene la cámara a una distancia con suavizado/colisión.
+
+	UPROPERTY(VisibleAnywhere, Category = "Cámara")
+	UCameraComponent* FollowCamera;
+	// Cámara que sigue al personaje al final del SpringArm.
+
+	// ---- Parámetros de movimiento ----
+	UPROPERTY(EditAnywhere, Category = "Movimiento")
+	float WalkSpeed = 300.f;
+	// Velocidad de caminar (editable desde el editor).
+
+	UPROPERTY(EditAnywhere, Category = "Movimiento")
+	float RunSpeed = 650.f;
+	// Velocidad de correr (editable desde el editor).
+
+	// ---- Estado ----
+	bool bIsRunning = false;
+	// Flag para saber si estamos corriendo.
+
+	// ---- Acciones (métodos) ----
+	UFUNCTION()
+	void AccionMostrarMensaje();
+	// Muestra un mensaje en pantalla (Parte B: acción 1).
+
+	UFUNCTION()
+	void AccionAlternarCorrer();
+	// Alterna entre caminar y correr (Parte B: acción 2).
+
+	UFUNCTION()
+	void AccionEspecial();
+	// Cambia FOV temporalmente (Parte B: acción 3).
+
+	// ---- Soporte de AccionEspecial ----
+	float FOVOriginal = 90.f;
+	// Guardamos FOV original para restaurarlo.
+
+	UPROPERTY(EditAnywhere, Category = "Cámara")
+	float FOVEspecial = 70.f;
+	// FOV temporal cuando disparamos la acción especial.
+
+	UPROPERTY(EditAnywhere, Category = "Cámara")
+	float DuracionFOV = 0.75f;
+	// Cuánto dura el FOV especial antes de restaurar.
+
+	FTimerHandle TimerHandle_RestoreFOV;
+	// Timer para volver al FOV original.
+
+	// Función privada para restaurar el FOV tras el timer.
+	void RestaurarFOV();
+
+	// ---- Movimiento analógico (opcional útil) ----
+	void MoveForward(float Value);
+	// Avanza/retrocede con W/S o stick.
+
+	void MoveRight(float Value);
+	// Se mueve lateralmente con A/D o stick.
+
+	void Turn(float Value);
+	// Yaw con mouse/stick horizontal.
+
+	void LookUp(float Value);
+	// Pitch con mouse/stick vertical.
+};
+// --------------------------------------------------------------------------------------
+// Archivo: EjerciciosprogramaciCharacter.cpp
+// Implementación del personaje con cámara, movimiento y 3 acciones en C++.
+// Todas las líneas están comentadas arriba (Parte A).
+// --------------------------------------------------------------------------------------
 
 #include "EjerciciosprogramaciCharacter.h"
+// Incluyo mi propio header para definir los métodos de la clase.
 
-// Componentes de cámara y boom
-#include "Camera/CameraComponent.h"
-#include "GameFramework/SpringArmComponent.h"
-
-// Movimiento y entrada
 #include "GameFramework/CharacterMovementComponent.h"
+// Para acceder a GetCharacterMovement() y configurar velocidades.
+
 #include "Components/InputComponent.h"
+// Para bindeos de input con UInputComponent.
 
-// Utilidades
 #include "Engine/Engine.h"
-#include "TimerManager.h"
-#include "GameFramework/Controller.h"
-#include "GameFramework/PlayerController.h"
+// Para GEngine->AddOnScreenDebugMessage.
 
-// -----------------------------
-// Constructor
-// -----------------------------
+DEFINE_LOG_CATEGORY(LogTemplateCharacter);
+// Defino la categoría de logs declarada en el header.
+
+// Constructor: creo componentes y seteo defaults.
 AEjerciciosprogramaciCharacter::AEjerciciosprogramaciCharacter()
 {
-	// Llamar Tick() cada frame (útil si más adelante querés lógica por frame)
-	PrimaryActorTick.bCanEverTick = true;
+	// Creo el SpringArm como subobjeto del Character.
+	SpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("SpringArm"));
+	// Adjunto el brazo al RootComponent (cápsula del Character).
+	SpringArm->SetupAttachment(RootComponent);
+	// Distancia de la cámara desde el personaje.
+	SpringArm->TargetArmLength = 400.f;
+	// Permite que el brazo use el control del jugador para rotar.
+	SpringArm->bUsePawnControlRotation = true;
+	// Habilita colisión del boom para no atravesar paredes.
+	SpringArm->bDoCollisionTest = true;
 
-	// ==== Configuración del Character ====
-	// El personaje mira hacia donde se mueve (en lugar de usar rotación del controlador)
-	bUseControllerRotationPitch = false;
-	bUseControllerRotationYaw = false;
-	bUseControllerRotationRoll = false;
-
-	// Configura el movimiento para orientarse a la dirección del input
-	if (UCharacterMovementComponent* Move = GetCharacterMovement())
-	{
-		Move->bOrientRotationToMovement = true;          // gira hacia la dirección de movimiento
-		Move->RotationRate = FRotator(0.f, 500.f, 0.f);  // rapidez al girar
-		Move->MaxWalkSpeed = VelocidadCaminar;           // velocidad inicial (editable en el Editor)
-		// Guardamos el JumpZ original para poder restaurarlo tras SaltoExtra
-		JumpZOriginal = Move->JumpZVelocity;
-	}
-
-	// ==== Componentes de cámara ====
-	// Brazo de cámara (boom) que coloca la cámara por detrás del personaje
-	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
-	CameraBoom->SetupAttachment(RootComponent);
-	CameraBoom->TargetArmLength = 400.f;           // distancia de la cámara al personaje
-	CameraBoom->bUsePawnControlRotation = true;    // boom usa la rotación del controlador (mouse/gamepad)
-
-	// Cámara que sigue al personaje (anclada al boom)
+	// Creo la cámara y la adjunto al final del SpringArm.
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
-	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
-	FollowCamera->bUsePawnControlRotation = false; // la cámara no rota por sí misma (ya lo hace el boom)
+	// La cámara se adjunta al socket del final del brazo.
+	FollowCamera->SetupAttachment(SpringArm, USpringArmComponent::SocketName);
+	// La cámara NO rota con el control (deja esa tarea al boom).
+	FollowCamera->bUsePawnControlRotation = false;
+	// FOV por defecto (lo guardamos también en FOVOriginal en BeginPlay).
+	FollowCamera->FieldOfView = 90.f;
+
+	// Configuro la rotación del Character respecto al movimiento (gira hacia donde se mueve).
+	bUseControllerRotationYaw = false;
+	// El movimiento orienta la rotación del Character hacia la dirección de entrada.
+	GetCharacterMovement()->bOrientRotationToMovement = true;
+	// Velocidad inicial como caminar.
+	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
+	// Multiplicador de giro al moverse (suavidad).
+	GetCharacterMovement()->RotationRate = FRotator(0.f, 540.f, 0.f);
 }
 
-// -----------------------------
-// BeginPlay
-// -----------------------------
+// BeginPlay: inicializo valores que dependen de componentes ya creados.
 void AEjerciciosprogramaciCharacter::BeginPlay()
 {
+	// Llamo a la implementación base (buena práctica).
 	Super::BeginPlay();
-	// Si alguna vez cambiás VelocidadCaminar en el editor antes de Play,
-	// asegurate que el movimiento refleje ese valor al iniciar:
-	if (UCharacterMovementComponent* Move = GetCharacterMovement())
+
+	// Guardo el FOV actual como original para restaurarlo luego.
+	if (FollowCamera)
 	{
-		Move->MaxWalkSpeed = VelocidadCaminar;
+		FOVOriginal = FollowCamera->FieldOfView;
 	}
+
+	// Log de confirmación en la salida de Output Log.
+	UE_LOG(LogTemplateCharacter, Log, TEXT("Character listo. Velocidad actual: %.1f"), GetCharacterMovement()->MaxWalkSpeed);
 }
 
-// -----------------------------
-// Setup de Input (BINDINGS)
-// -----------------------------
+// Setup de inputs: mapea teclas a funciones C++.
 void AEjerciciosprogramaciCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
+	// Llamo al padre para asegurar comportamiento base.
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 
-	// =========================
-	// PARTE B — TUS 3 ACCIONES
-	// =========================
+	// ---- Ejes de movimiento (WSAD/Arrows) ----
+	PlayerInputComponent->BindAxis(TEXT("MoveForward"), this, &AEjerciciosprogramaciCharacter::MoveForward);
+	// Eje vertical: W/S o Up/Down para avanzar/retroceder.
 
-	// 1) MostrarMensaje → tecla M (evento Presionado)
-	PlayerInputComponent->BindAction(
-		TEXT("MostrarMensaje"), IE_Pressed, this, &AEjerciciosprogramaciCharacter::AccionMostrarMensaje
-	);
+	PlayerInputComponent->BindAxis(TEXT("MoveRight"), this, &AEjerciciosprogramaciCharacter::MoveRight);
+	// Eje horizontal: A/D o Left/Right para moverse lateralmente.
 
-	// 2) SaltoExtra → SpaceBar (evento Presionado)
-	PlayerInputComponent->BindAction(
-		TEXT("SaltoExtra"), IE_Pressed, this, &AEjerciciosprogramaciCharacter::AccionSaltoExtra
-	);
+	// ---- Ejes de cámara (mouse o stick derecho) ----
+	PlayerInputComponent->BindAxis(TEXT("Turn"), this, &AEjerciciosprogramaciCharacter::Turn);
+	// Girar en yaw (mouse X).
 
-	// 3) Correr → LeftShift (Presionado/Soltado)
-	PlayerInputComponent->BindAction(
-		TEXT("Correr"), IE_Pressed, this, &AEjerciciosprogramaciCharacter::AccionCorrer_Pressed
-	);
-	PlayerInputComponent->BindAction(
-		TEXT("Correr"), IE_Released, this, &AEjerciciosprogramaciCharacter::AccionCorrer_Released
-	);
+	PlayerInputComponent->BindAxis(TEXT("LookUp"), this, &AEjerciciosprogramaciCharacter::LookUp);
+	// Mirar en pitch (mouse Y).
 
-	// =========================
-	// (Opcional) Si usaras Axis/Action clásicos para mover/mirar,
-	// podrías hacer BindAxis aquí. En este template tenemos funciones
-	// Move/Look y Do* por si usás UI o Enhanced Input desde BP.
-	// =========================
+	// ----------------------------------------------------------------------------------
+	// PARTE B — Acciones en C++ (creá las Action Mappings en Project Settings → Input)
+	// 1) Action Mapping: "MostrarMensaje" (tecla sugerida: M)
+	// 2) Action Mapping: "AlternarCorrer" (tecla sugerida: LeftShift)
+	// 3) Action Mapping: "AccionEspecial" (tecla sugerida: Q)
+	// ----------------------------------------------------------------------------------
+
+	// Bind de acción 1: al presionar, mostrar mensaje.
+	PlayerInputComponent->BindAction(TEXT("MostrarMensaje"), IE_Pressed, this, &AEjerciciosprogramaciCharacter::AccionMostrarMensaje);
+
+	// Bind de acción 2: al presionar, alternar velocidad caminar/correr.
+	PlayerInputComponent->BindAction(TEXT("AlternarCorrer"), IE_Pressed, this, &AEjerciciosprogramaciCharacter::AccionAlternarCorrer);
+
+	// Bind de acción 3: al presionar, activar FOV especial temporal.
+	PlayerInputComponent->BindAction(TEXT("AccionEspecial"), IE_Pressed, this, &AEjerciciosprogramaciCharacter::AccionEspecial);
 }
 
-// =====================================================
-// IMPLEMENTACIÓN — ACCIONES PERSONALIZADAS (Parte B)
-// =====================================================
+// Movimiento hacia adelante/atrás.
+void AEjerciciosprogramaciCharacter::MoveForward(float Value)
+{
+	// Si hay input (Value != 0), agrego movimiento en la dirección forward del controlador.
+	if (Controller && Value != 0.f)
+	{
+		// Obtengo rotación del controlador (cámara).
+		const FRotator ControlRot = Controller->GetControlRotation();
+		// Construyo rotación solo en yaw (plano horizontal).
+		const FRotator YawRot(0.f, ControlRot.Yaw, 0.f);
+		// Convierto yaw a vector forward.
+		const FVector Direction = FRotationMatrix(YawRot).GetUnitAxis(EAxis::X);
+		// Añado movimiento en esa dirección, escalado por Value.
+		AddMovementInput(Direction, Value);
+	}
+}
 
-// M → imprime mensaje en pantalla por 3 segundos
+// Movimiento lateral.
+void AEjerciciosprogramaciCharacter::MoveRight(float Value)
+{
+	// Si hay input lateral, muevo a la derecha/izquierda.
+	if (Controller && Value != 0.f)
+	{
+		// Rotación del controlador.
+		const FRotator ControlRot = Controller->GetControlRotation();
+		// Yaw solamente.
+		const FRotator YawRot(0.f, ControlRot.Yaw, 0.f);
+		// Vector derecha (eje Y).
+		const FVector Direction = FRotationMatrix(YawRot).GetUnitAxis(EAxis::Y);
+		// Aplico movimiento lateral.
+		AddMovementInput(Direction, Value);
+	}
+}
+
+// Giro en yaw con mouse/stick.
+void AEjerciciosprogramaciCharacter::Turn(float Value)
+{
+	// Añado entrada de yaw (rotación horizontal) si hay valor.
+	AddControllerYawInput(Value);
+}
+
+// Elevación en pitch con mouse/stick.
+void AEjerciciosprogramaciCharacter::LookUp(float Value)
+{
+	// Añado entrada de pitch (rotación vertical) si hay valor.
+	AddControllerPitchInput(Value);
+}
+
+// Acción 1: mostrar un mensaje en pantalla.
 void AEjerciciosprogramaciCharacter::AccionMostrarMensaje()
 {
+	// Verifico que GEngine exista (contexto de editor/juego).
 	if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(
-			-1,              // id (-1 = siempre un nuevo mensaje)
-			3.f,             // duración
-			FColor::Yellow,  // color
-			TEXT("¡Acción MostrarMensaje ejecutada!")
-		);
+		// Muestro un mensaje por 2 segundos (Key -1 para que no reemplace otros).
+		GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Green, TEXT("¡Hola! Acción: MostrarMensaje"));
 	}
+
+	// También lo mando al Output Log vía UE_LOG.
+	UE_LOG(LogTemplateCharacter, Log, TEXT("AccionMostrarMensaje ejecutada"));
 }
 
-// SpaceBar → salto extra: sube JumpZ temporalmente y salta; luego restaura
-void AEjerciciosprogramaciCharacter::AccionSaltoExtra()
+// Acción 2: alternar entre caminar y correr.
+void AEjerciciosprogramaciCharacter::AccionAlternarCorrer()
 {
-	if (UCharacterMovementComponent* Move = GetCharacterMovement())
+	// Invierto el estado de correr.
+	bIsRunning = !bIsRunning;
+
+	// Elijo velocidad según el estado.
+	const float NewSpeed = bIsRunning ? RunSpeed : WalkSpeed;
+
+	// Seteo la velocidad máxima de caminata del CharacterMovement.
+	GetCharacterMovement()->MaxWalkSpeed = NewSpeed;
+
+	// Mensaje en pantalla para feedback rápido.
+	if (GEngine)
 	{
-		// Aumenta salto según FactorSaltoExtra (editable en el editor)
-		Move->JumpZVelocity = JumpZOriginal * FactorSaltoExtra;
-
-		// Ejecuta un salto
-		Jump();
-
-		// Restaura JumpZ a los 0.5 segundos
-		GetWorldTimerManager().SetTimer(
-			TimerHandle_RestoreJumpZ,
-			[this]()
-			{
-				if (UCharacterMovementComponent* M = GetCharacterMovement())
-				{
-					M->JumpZVelocity = JumpZOriginal;
-				}
-			},
-			0.5f, false
-		);
+		const FString Texto = bIsRunning ? TEXT("Corriendo") : TEXT("Caminando");
+		GEngine->AddOnScreenDebugMessage(-1, 1.5f, FColor::Cyan, Texto);
 	}
+
+	// Log informativo.
+	UE_LOG(LogTemplateCharacter, Log, TEXT("Velocidad actual: %.1f"), NewSpeed);
 }
 
-// LeftShift PRESIONADO → corre (sube MaxWalkSpeed)
-void AEjerciciosprogramaciCharacter::AccionCorrer_Pressed()
+// Acción 3: FOV especial temporal (zoom).
+void AEjerciciosprogramaciCharacter::AccionEspecial()
 {
-	if (UCharacterMovementComponent* Move = GetCharacterMovement())
+	// Si hay cámara válida, aplico FOV especial y arranco un timer para restaurar.
+	if (FollowCamera)
 	{
-		Move->MaxWalkSpeed = VelocidadCorrer;
+		// Aplico el FOV reducido/ampliado (editable en el editor).
+		FollowCamera->SetFieldOfView(FOVEspecial);
+
+		// Seteo un timer que llamará a RestaurarFOV luego de DuracionFOV segundos.
+		GetWorldTimerManager().SetTimer(TimerHandle_RestoreFOV, this, &AEjerciciosprogramaciCharacter::RestaurarFOV, DuracionFOV, false);
+
+		// Mensaje de feedback.
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 0.8f, FColor::Yellow, TEXT("Acción Especial: FOV temporal"));
+		}
 	}
 }
 
-// LeftShift SOLTADO → vuelve a caminar (restaura MaxWalkSpeed)
-void AEjerciciosprogramaciCharacter::AccionCorrer_Released()
+// Restaura el FOV de la cámara al valor original.
+void AEjerciciosprogramaciCharacter::RestaurarFOV()
 {
-	if (UCharacterMovementComponent* Move = GetCharacterMovement())
+	// Si hay cámara válida, restauro el FOV original guardado.
+	if (FollowCamera)
 	{
-		Move->MaxWalkSpeed = VelocidadCaminar;
+		FollowCamera->SetFieldOfView(FOVOriginal);
 	}
-}
-
-// =====================================================
-// TEMPLATE — Funciones de movimiento/mirada y variantes
-// (Se implementan para que el template compile y,
-// si las invocás desde UI/Blueprints, funcionen.)
-// =====================================================
-
-// Llamada por el sistema de input (Enhanced o similar) para mover
-void AEjerciciosprogramaciCharacter::Move(const FInputActionValue& Value)
-{
-	// Value es un Vector2D: (X = Forward, Y = Right) según el mapeo del template
-	const FVector2D MoveVector = Value.Get<FVector2D>();
-	if (Controller)
-	{
-		// Dirección hacia adelante y derecha basada en la rotación del controlador (Yaw)
-		const FRotator ControlRot = Controller->GetControlRotation();
-		const FRotator YawRot(0.f, ControlRot.Yaw, 0.f);
-
-		const FVector ForwardDir = FRotationMatrix(YawRot).GetUnitAxis(EAxis::X);
-		const FVector RightDir = FRotationMatrix(YawRot).GetUnitAxis(EAxis::Y);
-
-		AddMovementInput(ForwardDir, MoveVector.Y);
-		AddMovementInput(RightDir, MoveVector.X);
-	}
-}
-
-// Llamada por el sistema de input para mirar
-void AEjerciciosprogramaciCharacter::Look(const FInputActionValue& Value)
-{
-	// Value es un Vector2D: (X = Yaw, Y = Pitch)
-	const FVector2D LookAxis = Value.Get<FVector2D>();
-	AddControllerYawInput(LookAxis.X);
-	AddControllerPitchInput(LookAxis.Y);
-}
-
-// Expuesto a BP/UI: mueve en ejes Right/Forward (útil para UI virtual sticks)
-void AEjerciciosprogramaciCharacter::DoMove(float Right, float Forward)
-{
-	if (Controller)
-	{
-		const FRotator ControlRot = Controller->GetControlRotation();
-		const FRotator YawRot(0.f, ControlRot.Yaw, 0.f);
-
-		const FVector ForwardDir = FRotationMatrix(YawRot).GetUnitAxis(EAxis::X);
-		const FVector RightDir = FRotationMatrix(YawRot).GetUnitAxis(EAxis::Y);
-
-		AddMovementInput(ForwardDir, Forward);
-		AddMovementInput(RightDir, Right);
-	}
-}
-
-// Expuesto a BP/UI: aplica mirada (útil para UI sliders)
-void AEjerciciosprogramaciCharacter::DoLook(float Yaw, float Pitch)
-{
-	AddControllerYawInput(Yaw);
-	AddControllerPitchInput(Pitch);
-}
-
-// Expuesto a BP/UI: iniciar salto
-void AEjerciciosprogramaciCharacter::DoJumpStart()
-{
-	Jump();
-}
-
-// Expuesto a BP/UI: terminar salto
-void AEjerciciosprogramaciCharacter::DoJumpEnd()
-{
-	StopJumping();
 }

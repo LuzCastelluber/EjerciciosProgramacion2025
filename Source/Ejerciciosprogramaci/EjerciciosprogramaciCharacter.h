@@ -1,192 +1,116 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+// --------------------------------------------------------------------------------------
+// Archivo: EjerciciosprogramaciCharacter.h
+// Objetivo: Personaje con cámara básica y 3 acciones mapeadas desde C++.
+// Cada línea está comentada justo arriba (Parte A del TP).
+// --------------------------------------------------------------------------------------
 
 #pragma once
+// Evita múltiples inclusiones del header durante la compilación.
 
-// --- Tipos básicos y utilidades de Unreal
 #include "CoreMinimal.h"
+// Tipos/utilidades base de Unreal (FString, FVector, logs, etc.).
 
-// --- Clase base de personaje
 #include "GameFramework/Character.h"
+// Clase base de personaje con movimiento, cápsula, etc.
 
-// --- Logs del template
-#include "Logging/LogMacros.h"
+#include "Camera/CameraComponent.h"
+// Permite declarar y usar la cámara del jugador.
 
-// --- Necesario porque en este header guardamos un FTimerHandle como miembro
+#include "GameFramework/SpringArmComponent.h"
+// Permite usar el brazo de cámara (boom) con colisión y distancia.
+
 #include "TimerManager.h"
+// Permite usar timers (lo necesitamos para restaurar el FOV en AccionEspecial).
 
 #include "EjerciciosprogramaciCharacter.generated.h"
+// Macro obligatoria para generar el código de reflexión de Unreal.
 
-// ---------- Forward declarations de componentes / input ----------
-class USpringArmComponent;
-class UCameraComponent;
-class UInputAction;
-struct FInputActionValue;
-
-// ---------- Categoría de logs del template ----------
+// Declaro una categoría de logs propia para este Character.
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
 
-/**
- *  Personaje third person controlable por el jugador,
- *  con cámara orbitando (template de UE5)
- */
-UCLASS(abstract)
+// UCLASS marca esta clase para el sistema de reflexión.
+UCLASS()
 class AEjerciciosprogramaciCharacter : public ACharacter
+	// Heredamos de ACharacter para tener movimiento estándar.
 {
 	GENERATED_BODY()
+	// Inserta boilerplate requerido por Unreal.
 
 public:
-	// ---------- Constructor ----------
+	// Constructor: creo componentes y valores por defecto.
 	AEjerciciosprogramaciCharacter();
 
 protected:
-	// ---------- Ciclo de vida ----------
+	// BeginPlay: se ejecuta al empezar el juego o al spawnear.
 	virtual void BeginPlay() override;
 
-	// ---------- Enlace de entradas (acciones/ejes) ----------
+	// Enlaces de entradas: donde bindeamos teclas/acciones a funciones C++.
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
-	// ================== INPUTS DEL TEMPLATE (Enhanced Input) ==================
-	/** Acción de salto (template) */
-	UPROPERTY(EditAnywhere, Category = "Input")
-	UInputAction* JumpAction;
+private:
+	// ---- Componentes de cámara ----
+	UPROPERTY(VisibleAnywhere, Category = "Cámara")
+	USpringArmComponent* SpringArm;
+	// Brazo que mantiene la cámara a una distancia con suavizado/colisión.
 
-	/** Acción de movimiento (template) */
-	UPROPERTY(EditAnywhere, Category = "Input")
-	UInputAction* MoveAction;
-
-	/** Acción de mirar (template) */
-	UPROPERTY(EditAnywhere, Category = "Input")
-	UInputAction* LookAction;
-
-	/** Acción de mirar con mouse (template) */
-	UPROPERTY(EditAnywhere, Category = "Input")
-	UInputAction* MouseLookAction;
-
-protected:
-	/** Llamada por el sistema de input para mover */
-	void Move(const FInputActionValue& Value);
-
-	/** Llamada por el sistema de input para mirar */
-	void Look(const FInputActionValue& Value);
-
-public:
-	/** Movimiento desde UI/control (expuesto a Blueprint) */
-	UFUNCTION(BlueprintCallable, Category = "Input")
-	virtual void DoMove(float Right, float Forward);
-
-	/** Mirar desde UI/control (expuesto a Blueprint) */
-	UFUNCTION(BlueprintCallable, Category = "Input")
-	virtual void DoLook(float Yaw, float Pitch);
-
-	/** Inicio de salto desde UI/control (expuesto a Blueprint) */
-	UFUNCTION(BlueprintCallable, Category = "Input")
-	virtual void DoJumpStart();
-
-	/** Fin de salto desde UI/control (expuesto a Blueprint) */
-	UFUNCTION(BlueprintCallable, Category = "Input")
-	virtual void DoJumpEnd();
-
-	// ================== COMPONENTES DE CÁMARA ==================
-	/** Brazo de cámara (coloca la cámara detrás del personaje) */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
-	USpringArmComponent* CameraBoom;
-
-	/** Cámara que sigue al personaje */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(VisibleAnywhere, Category = "Cámara")
 	UCameraComponent* FollowCamera;
+	// Cámara que sigue al personaje al final del SpringArm.
 
-	// ================== ACCIONES NUEVAS (Parte B) ==================
-public:
-	// --- Acción: al presionar "M" se muestra un mensaje en pantalla
+	// ---- Parámetros de movimiento ----
+	UPROPERTY(EditAnywhere, Category = "Movimiento")
+	float WalkSpeed = 300.f;
+	// Velocidad de caminar (editable desde el editor).
+
+	UPROPERTY(EditAnywhere, Category = "Movimiento")
+	float RunSpeed = 650.f;
+	// Velocidad de correr (editable desde el editor).
+
+	// ---- Estado ----
+	bool bIsRunning = false;
+	// Flag para saber si estamos corriendo.
+
+	// ---- Acciones (métodos) ----
+	UFUNCTION()
 	void AccionMostrarMensaje();
+	// Muestra un mensaje en pantalla (Parte B: acción 1).
 
-	// --- Acción: al presionar "SpaceBar" se realiza un salto más alto temporalmente
-	void AccionSaltoExtra();
+	UFUNCTION()
+	void AccionAlternarCorrer();
+	// Alterna entre caminar y correr (Parte B: acción 2).
 
-	// --- Acción: al mantener "LeftShift" se aumenta la velocidad (correr)
-	void AccionCorrer_Pressed();
+	UFUNCTION()
+	void AccionEspecial();
+	// Cambia FOV temporalmente (Parte B: acción 3).
 
-	// --- Acción: al soltar "LeftShift" se vuelve a la velocidad normal (caminar)
-	void AccionCorrer_Released();
+	// ---- Soporte de AccionEspecial ----
+	float FOVOriginal = 90.f;
+	// Guardamos FOV original para restaurarlo.
 
-protected:
-	// ================== PARÁMETROS EDITABLES DESDE EL EDITOR ==================
-	// --- Velocidad de caminar por defecto (cámbiala en el Editor para probar sin recompilar)
-	UPROPERTY(EditAnywhere, Category = "Movimiento")
-	float VelocidadCaminar = 300.f;
+	UPROPERTY(EditAnywhere, Category = "Cámara")
+	float FOVEspecial = 70.f;
+	// FOV temporal cuando disparamos la acción especial.
 
-	// --- Velocidad al correr (cámbiala en el Editor)
-	UPROPERTY(EditAnywhere, Category = "Movimiento")
-	float VelocidadCorrer = 650.f;
+	UPROPERTY(EditAnywhere, Category = "Cámara")
+	float DuracionFOV = 0.75f;
+	// Cuánto dura el FOV especial antes de restaurar.
 
-	// --- Multiplicador del salto extra (1.5 = 50% más alto)
-	UPROPERTY(EditAnywhere, Category = "Movimiento")
-	float FactorSaltoExtra = 1.5f;
+	FTimerHandle TimerHandle_RestoreFOV;
+	// Timer para volver al FOV original.
 
-	// --- Guardamos el JumpZVelocity original para restaurarlo después del salto extra
-	float JumpZOriginal = 600.f;
+	// Función privada para restaurar el FOV tras el timer.
+	void RestaurarFOV();
 
-	// --- Timer para restaurar el JumpZVelocity tras el SaltoExtra
-	FTimerHandle TimerHandle_RestoreJumpZ;
+	// ---- Movimiento analógico (opcional útil) ----
+	void MoveForward(float Value);
+	// Avanza/retrocede con W/S o stick.
 
-public:
-	// ================== GETTERS DE COMPONENTES ==================
-	/** Devuelve el subobjeto CameraBoom */
-	FORCEINLINE USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
+	void MoveRight(float Value);
+	// Se mueve lateralmente con A/D o stick.
 
-	/** Devuelve el subobjeto FollowCamera */
-	FORCEINLINE UCameraComponent* GetFollowCamera() const { return FollowCamera; }
+	void Turn(float Value);
+	// Yaw con mouse/stick horizontal.
+
+	void LookUp(float Value);
+	// Pitch con mouse/stick vertical.
 };
-void AEjerciciosprogramaciCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
-{
-	Super::SetupPlayerInputComponent(PlayerInputComponent);
-
-	PlayerInputComponent->BindAction("MostrarMensaje", IE_Pressed, this, &AEjerciciosprogramaciCharacter::AccionMostrarMensaje);
-	PlayerInputComponent->BindAction("SaltoExtra", IE_Pressed, this, &AEjerciciosprogramaciCharacter::AccionSaltoExtra);
-	PlayerInputComponent->BindAction("Correr", IE_Pressed, this, &AEjerciciosprogramaciCharacter::AccionCorrer_Pressed);
-	PlayerInputComponent->BindAction("Correr", IE_Released, this, &AEjerciciosprogramaciCharacter::AccionCorrer_Released);
-}
-void AEjerciciosprogramaciCharacter::AccionMostrarMensaje()
-{
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Yellow, TEXT("¡Acción MostrarMensaje ejecutada!"));
-	}
-}
-
-void AEjerciciosprogramaciCharacter::AccionSaltoExtra()
-{
-	if (UCharacterMovementComponent* Move = GetCharacterMovement())
-	{
-		Move->JumpZVelocity = JumpZOriginal * FactorSaltoExtra;
-		Jump();
-
-		GetWorldTimerManager().SetTimer(
-			TimerHandle_RestoreJumpZ,
-			[this]()
-			{
-				if (UCharacterMovementComponent* M = GetCharacterMovement())
-				{
-					M->JumpZVelocity = JumpZOriginal;
-				}
-			},
-			0.5f, false
-		);
-	}
-}
-
-void AEjerciciosprogramaciCharacter::AccionCorrer_Pressed()
-{
-	if (UCharacterMovementComponent* Move = GetCharacterMovement())
-	{
-		Move->MaxWalkSpeed = VelocidadCorrer;
-	}
-}
-
-void AEjerciciosprogramaciCharacter::AccionCorrer_Released()
-{
-	if (UCharacterMovementComponent* Move = GetCharacterMovement())
-	{
-		Move->MaxWalkSpeed = VelocidadCaminar;
-	}
-}
